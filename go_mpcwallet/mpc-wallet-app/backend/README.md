@@ -1,4 +1,6 @@
 # MPC Wallet Backend
+## todo
+替换mpc中网络通信部分，实现mocknet数据以字符串方式返回到前端
 
 基于 Go 和 Coinbase MPC 库实现的多方计算钱包后端服务。
 
