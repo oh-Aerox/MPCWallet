@@ -1,0 +1,21 @@
+{
+  "name": "mpc-core",
+  "version": "1.0.0",
+  "description": "MPC Core Algorithm Implementation",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.57.0"
+  },
+  "keywords": ["mpc", "cryptography", "shamir", "secret-sharing"],
+  "author": "MPC Wallet Team",
+  "license": "MIT"
+} 

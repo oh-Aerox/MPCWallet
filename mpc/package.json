@@ -1,0 +1,26 @@
+{
+  "name": "mpc-wallet",
+  "version": "1.0.0",
+  "description": "Multi-Party Computation Wallet System",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "test": "jest",
+    "lint": "eslint .",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install"
+  },
+  "keywords": ["mpc", "wallet", "blockchain", "cryptocurrency"],
+  "author": "MPC Wallet Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.57.0"
+  },
+  "dependencies": {
+    "typescript": "^5.3.3"
+  }
+} 

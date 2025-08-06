@@ -1,0 +1,119 @@
+# Cursor 编辑器忽略文件配置
+
+# 依赖目录
+node_modules/
+*/node_modules/
+
+# 构建输出
+dist/
+build/
+*/dist/
+*/build/
+
+# 日志文件
+*.log
+logs/
+*/logs/
+
+# 环境变量文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 缓存目录
+.cache/
+.npm/
+.yarn/
+
+# 临时文件
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE 配置文件
+.vscode/
+.idea/
+*.sublime-*
+.atom/
+
+# 版本控制
+.git/
+.gitignore
+
+
+
+# 测试覆盖率
+coverage/
+*.lcov
+
+# 文档生成
+docs/_build/
+docs/.doctrees/
+
+# 上传文件
+uploads/
+public/uploads/
+
+# 密钥和证书
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# 备份文件
+*.bak
+*.backup
+*_backup/
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 大文件
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.mkv
+
+# 图片文件（可选，根据需要调整）
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.svg
+*.ico
+
+# 字体文件
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.eot
+
+# 其他
+*.pid
+*.seed
+*.pid.lock
+
+# 项目特定忽略
+# 如果有特定的文件或目录需要忽略，可以在这里添加 
