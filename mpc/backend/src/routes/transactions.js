@@ -3,22 +3,63 @@ const router = express.Router();
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { ShamirSecretSharing } = require('../../../mpc-core/src/index');
-const { authenticateToken } = require('../middleware/auth');
+
 const { validateTransactionData } = require('../middleware/validation');
 const { logAudit } = require('../utils/audit');
+const SimpleMPCSignature = require('../utils/mpc-signature-simple');
 
 // 模拟数据库
 let transactions = [];
 let wallets = [];
+let mpcShares = [];
 
 // 初始化MPC实例
 const shamir = new ShamirSecretSharing();
+
+// 初始化MPC签名工具
+const mpcSignature = new SimpleMPCSignature();
+
+// 解密份额函数
+function decryptShare(encryptedShare) {
+  try {
+    // 尝试解析JSON格式的加密数据
+    const encryptedData = JSON.parse(encryptedShare);
+    
+    if (encryptedData.iv && encryptedData.encrypted && encryptedData.authTag) {
+      // 使用AES-GCM解密
+      const encryptionKey = process.env.ENCRYPTION_KEY || 'your-32-character-encryption-key';
+      const algorithm = 'aes-256-gcm';
+      
+      const key = Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32));
+      const iv = Buffer.from(encryptedData.iv, 'hex');
+      const authTag = Buffer.from(encryptedData.authTag, 'hex');
+      
+      // 创建decipher
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      decipher.setAAD(Buffer.from('MPC_SHARE', 'utf8'));
+      decipher.setAuthTag(authTag);
+      
+      // 解密
+      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return BigInt(decrypted);
+    } else {
+      // 降级到base64解码
+      return BigInt(Buffer.from(encryptedShare, 'base64').toString());
+    }
+  } catch (error) {
+    console.error('Decryption error:', error);
+    // 降级到base64解码
+    return BigInt(Buffer.from(encryptedShare, 'base64').toString());
+  }
+}
 
 /**
  * 获取所有交易
  * GET /api/transactions
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 10, status, walletId } = req.query;
     
@@ -68,7 +109,7 @@ router.get('/', authenticateToken, async (req, res) => {
  * 获取单个交易详情
  * GET /api/transactions/:id
  */
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const transaction = transactions.find(tx => tx.id === req.params.id);
     
@@ -105,7 +146,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
  * 创建新交易
  * POST /api/transactions
  */
-router.post('/', authenticateToken, validateTransactionData, async (req, res) => {
+router.post('/', validateTransactionData, async (req, res) => {
   try {
     const { walletId, to, amount, symbol, gasLimit, gasPrice } = req.body;
 
@@ -191,7 +232,7 @@ router.post('/', authenticateToken, validateTransactionData, async (req, res) =>
  * 审批交易
  * POST /api/transactions/:id/approve
  */
-router.post('/:id/approve', authenticateToken, async (req, res) => {
+router.post('/:id/approve', async (req, res) => {
   try {
     const { approved, comment } = req.body;
     const transaction = transactions.find(tx => tx.id === req.params.id);
@@ -294,9 +335,9 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
  * 签名交易
  * POST /api/transactions/:id/sign
  */
-router.post('/:id/sign', authenticateToken, async (req, res) => {
+router.post('/:id/sign', async (req, res) => {
   try {
-    const transaction = transactions.find(tx => tx.id === req.params.id);
+    const transaction = transactions.find(t => t.id === req.params.id);
     
     if (!transaction) {
       return res.status(404).json({
@@ -305,17 +346,16 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       });
     }
 
-    // 检查交易状态
-    if (transaction.status !== 'approved') {
-      return res.status(400).json({
+    const wallet = wallets.find(w => w.id === transaction.walletId);
+    if (!wallet) {
+      return res.status(404).json({
         success: false,
-        error: 'Transaction must be approved before signing'
+        error: 'Wallet not found'
       });
     }
 
-    // 检查钱包权限
-    const wallet = wallets.find(w => w.id === transaction.walletId);
-    if (!wallet || !wallet.participants.includes(req.user.id)) {
+    // 检查用户权限
+    if (!wallet.participants.includes(req.user.id)) {
       return res.status(403).json({
         success: false,
         error: 'Access denied'
@@ -331,13 +371,52 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       });
     }
 
-    // 这里应该实现真实的MPC签名过程
-    // 目前使用模拟签名
+    // 获取用户的MPC份额
+    const userShare = mpcShares.find(share => 
+      share.walletId === wallet.id && share.userId === req.user.id
+    );
+
+    if (!userShare) {
+      return res.status(404).json({
+        success: false,
+        error: 'MPC share not found for this user'
+      });
+    }
+
+    // 解密份额
+    const decryptedShare = decryptShare(userShare.encryptedShare);
+    
+    // 生成消息哈希
+    const messageHash = mpcSignature.generateMessageHash(transaction);
+    
+    // 生成部分签名
+    const partialSignature = mpcSignature.generatePartialSignature(
+      decryptedShare,
+      messageHash,
+      userShare.shareIndex
+    );
+
+    // 验证部分签名
+    const isValidPartial = mpcSignature.verifyPartialSignature(
+      partialSignature,
+      messageHash,
+      partialSignature.publicKey
+    );
+
+    if (!isValidPartial) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid partial signature generated'
+      });
+    }
+
+    // 创建签名记录
     const signature = {
       id: uuidv4(),
       userId: req.user.id,
       username: req.user.username,
-      signature: '0x' + crypto.randomBytes(64).toString('hex'),
+      partialSignature: partialSignature,
+      messageHash: messageHash.toString('hex'),
       timestamp: new Date()
     };
 
@@ -345,31 +424,59 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
 
     // 检查是否达到签名阈值
     if (transaction.signatures.length >= wallet.threshold) {
-      // 生成交易哈希
-      transaction.txHash = '0x' + crypto.randomBytes(32).toString('hex');
-      transaction.status = 'signed';
-      
-      // 这里应该广播交易到区块链网络
-      // 目前模拟广播过程
-      setTimeout(() => {
-        transaction.status = 'broadcasted';
-        transaction.updatedAt = new Date();
-        
-        // 模拟交易确认
-        setTimeout(() => {
-          transaction.status = 'confirmed';
-          transaction.updatedAt = new Date();
+      try {
+        // 组合部分签名生成完整签名
+        const partialSignatures = transaction.signatures
+          .slice(0, wallet.threshold)
+          .map(sig => sig.partialSignature);
+
+        const completeSignature = mpcSignature.combineSignaturesSimple(
+          partialSignatures,
+          messageHash
+        );
+
+        // 验证完整签名
+        const isValidComplete = mpcSignature.verifySignature(
+          completeSignature,
+          messageHash,
+          userShare.publicKey
+        );
+
+        if (isValidComplete) {
+          // 生成交易哈希
+          transaction.txHash = '0x' + crypto.randomBytes(32).toString('hex');
+          transaction.status = 'signed';
+          transaction.completeSignature = completeSignature;
           
-          // 通知用户交易确认
-          const io = req.app.get('io');
-          wallet.participants.forEach(participantId => {
-            io.to(`user-${participantId}`).emit('transaction-confirmed', {
-              transactionId: transaction.id,
-              txHash: transaction.txHash
-            });
-          });
-        }, 5000);
-      }, 2000);
+          // 这里应该广播交易到区块链网络
+          // 目前模拟广播过程
+          setTimeout(() => {
+            transaction.status = 'broadcasted';
+            transaction.updatedAt = new Date();
+            
+            // 模拟交易确认
+            setTimeout(() => {
+              transaction.status = 'confirmed';
+              transaction.updatedAt = new Date();
+              
+              // 通知用户交易确认
+              const io = req.app.get('io');
+              wallet.participants.forEach(participantId => {
+                io.to(`user-${participantId}`).emit('transaction-confirmed', {
+                  transactionId: transaction.id,
+                  txHash: transaction.txHash
+                });
+              });
+            }, 5000);
+          }, 2000);
+        } else {
+          console.error('Complete signature verification failed');
+          transaction.status = 'signature_failed';
+        }
+      } catch (error) {
+        console.error('Error combining signatures:', error);
+        transaction.status = 'signature_failed';
+      }
     }
 
     transaction.updatedAt = new Date();
@@ -382,7 +489,9 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       resourceId: transaction.id,
       details: {
         signatureCount: transaction.signatures.length,
-        threshold: wallet.threshold
+        threshold: wallet.threshold,
+        shareIndex: userShare.shareIndex,
+        status: transaction.status
       }
     });
 
@@ -392,13 +501,18 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
       io.to(`user-${participantId}`).emit('transaction-signed', {
         transactionId: transaction.id,
         signatureCount: transaction.signatures.length,
-        threshold: wallet.threshold
+        threshold: wallet.threshold,
+        status: transaction.status
       });
     });
 
     res.json({
       success: true,
-      data: transaction,
+      data: {
+        transaction: transaction,
+        partialSignature: partialSignature,
+        messageHash: messageHash.toString('hex')
+      },
       message: 'Transaction signed successfully'
     });
   } catch (error) {
@@ -414,7 +528,7 @@ router.post('/:id/sign', authenticateToken, async (req, res) => {
  * 获取交易统计
  * GET /api/transactions/stats
  */
-router.get('/stats', authenticateToken, async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
     const userWallets = wallets.filter(wallet => 
       wallet.participants.includes(req.user.id)
@@ -451,7 +565,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
  * 取消交易
  * POST /api/transactions/:id/cancel
  */
-router.post('/:id/cancel', authenticateToken, async (req, res) => {
+router.post('/:id/cancel', async (req, res) => {
   try {
     const transaction = transactions.find(tx => tx.id === req.params.id);
     

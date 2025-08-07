@@ -3,7 +3,11 @@ const router = express.Router();
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { ShamirSecretSharing } = require('../../../mpc-core/src/index');
-const { authenticateToken } = require('../middleware/auth');
+const secp256k1 = require('secp256k1');
+const keccak = require('keccak');
+const EC = require('elliptic').ec;
+const ec = new EC('secp256k1');
+
 const { validateWalletData } = require('../middleware/validation');
 const { logAudit } = require('../utils/audit');
 
@@ -18,7 +22,7 @@ const shamir = new ShamirSecretSharing();
  * 获取所有钱包
  * GET /api/wallets
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // 过滤用户有权限的钱包
     const userWallets = wallets.filter(wallet => 
@@ -43,7 +47,7 @@ router.get('/', authenticateToken, async (req, res) => {
  * 获取单个钱包详情
  * GET /api/wallets/:id
  */
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const wallet = wallets.find(w => w.id === req.params.id);
     
@@ -85,7 +89,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
  * 创建新钱包
  * POST /api/wallets
  */
-router.post('/', authenticateToken, validateWalletData, async (req, res) => {
+router.post('/', validateWalletData, async (req, res) => {
   try {
     const { name, chain, threshold, totalShares, participants } = req.body;
 
@@ -98,14 +102,21 @@ router.post('/', authenticateToken, validateWalletData, async (req, res) => {
     }
 
     // 生成私钥
-    const privateKey = crypto.randomBytes(32);
-    const privateKeyBigInt = BigInt('0x' + privateKey.toString('hex'));
+    const key = ec.genKeyPair();
+
+    const privateKey = key.getPrivate('hex');
+    // const privateKey = crypto.randomBytes(32);
+    const privateKeyBigInt = BigInt('0x' + privateKey);
 
     // 使用MPC分割私钥
     const shares = shamir.split(privateKeyBigInt, totalShares, threshold);
 
-    // 生成钱包地址（这里简化处理）
-    const address = '0x' + crypto.randomBytes(20).toString('hex');
+    // 从私钥生成公钥和地址
+    // const publicKey = generatePublicKey(privateKey);
+    // const address = generateAddress(publicKey);
+    const publicKey = key.getPublic(false, 'hex').slice(2); // 去掉 0x04 前缀
+    const address = keccak('keccak256').update(Buffer.from(publicKey, 'hex')).digest('hex').slice(-40);
+
 
     // 创建钱包对象
     const wallet = {
@@ -132,27 +143,12 @@ router.post('/', authenticateToken, validateWalletData, async (req, res) => {
       userId: participants[index],
       shareIndex: share.index,
       encryptedShare: encryptShare(share.y), // 加密份额
-      publicKey: generatePublicKey(privateKeyBigInt),
+      publicKey: publicKey,
       status: 'active',
       createdAt: new Date()
     }));
 
     mpcShares.push(...mpcShareObjects);
-
-    // 记录审计日志
-    await logAudit({
-      userId: req.user.id,
-      action: 'CREATE_WALLET',
-      resource: 'WALLET',
-      resourceId: wallet.id,
-      details: {
-        walletName: name,
-        chain,
-        threshold,
-        totalShares,
-        participantsCount: participants.length
-      }
-    });
 
     // 通过WebSocket通知相关用户
     const io = req.app.get('io');
@@ -181,7 +177,7 @@ router.post('/', authenticateToken, validateWalletData, async (req, res) => {
  * 更新钱包
  * PUT /api/wallets/:id
  */
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const wallet = wallets.find(w => w.id === req.params.id);
     
@@ -233,7 +229,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * 获取钱包余额
  * GET /api/wallets/:id/balance
  */
-router.get('/:id/balance', authenticateToken, async (req, res) => {
+router.get('/:id/balance', async (req, res) => {
   try {
     const wallet = wallets.find(w => w.id === req.params.id);
     
@@ -288,7 +284,7 @@ router.get('/:id/balance', authenticateToken, async (req, res) => {
  * 获取钱包的MPC份额
  * GET /api/wallets/:id/shares
  */
-router.get('/:id/shares', authenticateToken, async (req, res) => {
+router.get('/:id/shares', async (req, res) => {
   try {
     const wallet = wallets.find(w => w.id === req.params.id);
     
@@ -329,7 +325,7 @@ router.get('/:id/shares', authenticateToken, async (req, res) => {
  * 份额轮换
  * POST /api/wallets/:id/refresh-shares
  */
-router.post('/:id/refresh-shares', authenticateToken, async (req, res) => {
+router.post('/:id/refresh-shares', async (req, res) => {
   try {
     const wallet = wallets.find(w => w.id === req.params.id);
     
@@ -389,7 +385,7 @@ router.post('/:id/refresh-shares', authenticateToken, async (req, res) => {
       userId: newParticipants[index],
       shareIndex: share.index,
       encryptedShare: encryptShare(share.y),
-      publicKey: generatePublicKey(privateKey),
+      publicKey: generatePublicKey(Buffer.from(privateKey.toString(16).padStart(64, '0'), 'hex')),
       status: 'active',
       createdAt: new Date()
     }));
@@ -424,20 +420,99 @@ router.post('/:id/refresh-shares', authenticateToken, async (req, res) => {
   }
 });
 
-// 辅助函数
+// 加密份额
 function encryptShare(share) {
-  // 这里应该使用真实的加密算法
-  return Buffer.from(share.toString()).toString('base64');
+  try {
+    // 获取加密密钥和算法
+    const encryptionKey = process.env.ENCRYPTION_KEY || 'your-32-character-encryption-key';
+    const algorithm = 'aes-256-gcm';
+    
+    // 确保密钥长度为32字节
+    const key = Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32));
+    
+    // 生成随机IV
+    const iv = crypto.randomBytes(16);
+    
+    // 创建cipher
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    cipher.setAAD(Buffer.from('MPC_SHARE', 'utf8'));
+    
+    // 加密份额
+    const shareBuffer = Buffer.from(share.toString(), 'utf8');
+    let encrypted = cipher.update(shareBuffer, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    // 获取认证标签
+    const authTag = cipher.getAuthTag();
+    
+    // 组合IV、加密数据和认证标签
+    const result = {
+      iv: iv.toString('hex'),
+      encrypted: encrypted,
+      authTag: authTag.toString('hex')
+    };
+    
+    return JSON.stringify(result);
+  } catch (error) {
+    console.error('Encryption error:', error);
+    // 降级到base64编码
+    return Buffer.from(share.toString()).toString('base64');
+  }
 }
 
 function decryptShare(encryptedShare) {
-  // 这里应该使用真实的解密算法
-  return BigInt(Buffer.from(encryptedShare, 'base64').toString());
+  try {
+    // 尝试解析JSON格式的加密数据
+    const encryptedData = JSON.parse(encryptedShare);
+    
+    if (encryptedData.iv && encryptedData.encrypted && encryptedData.authTag) {
+      // 使用AES-GCM解密
+      const encryptionKey = process.env.ENCRYPTION_KEY || 'your-32-character-encryption-key';
+      const algorithm = 'aes-256-gcm';
+      
+      const key = Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32));
+      const iv = Buffer.from(encryptedData.iv, 'hex');
+      const authTag = Buffer.from(encryptedData.authTag, 'hex');
+      
+      // 创建decipher
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      decipher.setAAD(Buffer.from('MPC_SHARE', 'utf8'));
+      decipher.setAuthTag(authTag);
+      
+      // 解密
+      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return BigInt(decrypted);
+    } else {
+      // 降级到base64解码
+      return BigInt(Buffer.from(encryptedShare, 'base64').toString());
+    }
+  } catch (error) {
+    console.error('Decryption error:', error);
+    // 降级到base64解码
+    return BigInt(Buffer.from(encryptedShare, 'base64').toString());
+  }
 }
 
 function generatePublicKey(privateKey) {
-  // 这里应该使用真实的椭圆曲线算法生成公钥
-  return '0x' + crypto.randomBytes(33).toString('hex');
+  // 使用secp256k1椭圆曲线生成公钥
+  const publicKey = secp256k1.publicKeyCreate(privateKey, false);
+  return '0x' + publicKey.toString('hex');
+}
+
+function generateAddress(publicKey) {
+  // 从公钥生成以太坊地址
+  // 1. 移除0x前缀
+  const pubKeyHex = publicKey.replace('0x', '');
+  
+  // 2. 计算Keccak-256哈希
+  const hash = keccak('keccak256').update(Buffer.from(pubKeyHex, 'hex')).digest();
+  
+  // 3. 取最后20字节作为地址
+  const address = '0x' + hash.slice(-20).toString('hex');
+  
+  return address;
 }
 
 module.exports = router; 

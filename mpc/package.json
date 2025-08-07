@@ -12,15 +12,22 @@
     "lint": "eslint .",
     "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install"
   },
-  "keywords": ["mpc", "wallet", "blockchain", "cryptocurrency"],
+  "keywords": [
+    "mpc",
+    "wallet",
+    "blockchain",
+    "cryptocurrency"
+  ],
   "author": "MPC Wallet Team",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "jest": "^29.7.0",
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0"
   },
   "dependencies": {
+    "keccak": "^3.0.4",
+    "secp256k1": "^5.0.1",
     "typescript": "^5.3.3"
   }
-} 
+}

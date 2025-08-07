@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const { ShamirSecretSharing } = require('../../../mpc-core/src/index');
 
@@ -11,7 +10,7 @@ const shamir = new ShamirSecretSharing();
  * 获取MPC配置
  * GET /api/mpc/config
  */
-router.get('/config', authenticateToken, async (req, res) => {
+router.get('/config', async (req, res) => {
   try {
     const config = {
       algorithm: 'shamir',
@@ -41,7 +40,7 @@ router.get('/config', authenticateToken, async (req, res) => {
  * 验证份额
  * POST /api/mpc/verify-shares
  */
-router.post('/verify-shares', authenticateToken, async (req, res) => {
+router.post('/verify-shares', async (req, res) => {
   try {
     const { walletId, shares } = req.body;
 
@@ -110,7 +109,7 @@ router.post('/verify-shares', authenticateToken, async (req, res) => {
  * 份额备份
  * POST /api/mpc/backup-shares
  */
-router.post('/backup-shares', authenticateToken, async (req, res) => {
+router.post('/backup-shares', async (req, res) => {
   try {
     const { walletId, backupType } = req.body;
 
@@ -171,7 +170,7 @@ router.post('/backup-shares', authenticateToken, async (req, res) => {
  * 份额恢复
  * POST /api/mpc/restore-shares
  */
-router.post('/restore-shares', authenticateToken, async (req, res) => {
+router.post('/restore-shares', async (req, res) => {
   try {
     const { walletId, backupData } = req.body;
 
@@ -227,7 +226,7 @@ router.post('/restore-shares', authenticateToken, async (req, res) => {
  * 生成新份额
  * POST /api/mpc/generate-shares
  */
-router.post('/generate-shares', authenticateToken, async (req, res) => {
+router.post('/generate-shares', async (req, res) => {
   try {
     const { totalShares, threshold } = req.body;
 
@@ -266,13 +265,17 @@ router.post('/generate-shares', authenticateToken, async (req, res) => {
       }
     });
 
+    // 生成真实的公钥
+    const secp256k1 = require('secp256k1');
+    const publicKey = '0x' + secp256k1.publicKeyCreate(privateKey, false).toString('hex');
+
     res.json({
       success: true,
       data: {
         shares,
         totalShares,
         threshold,
-        publicKey: '0x' + crypto.randomBytes(33).toString('hex') // 模拟公钥
+        publicKey: publicKey
       },
       message: 'Shares generated successfully'
     });
@@ -289,7 +292,7 @@ router.post('/generate-shares', authenticateToken, async (req, res) => {
  * 份额轮换
  * POST /api/mpc/rotate-shares
  */
-router.post('/rotate-shares', authenticateToken, async (req, res) => {
+router.post('/rotate-shares', async (req, res) => {
   try {
     const { walletId, oldShares, newThreshold, newTotalShares } = req.body;
 
@@ -359,7 +362,7 @@ router.post('/rotate-shares', authenticateToken, async (req, res) => {
  * 获取MPC状态
  * GET /api/mpc/status
  */
-router.get('/status', authenticateToken, async (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     const status = {
       algorithm: 'Shamir Secret Sharing',

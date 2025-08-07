@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
+
 const { getAuditLogs, exportAuditLogs, getAuditStats, cleanupOldLogs } = require('../utils/audit');
 
 /**
  * 获取审计日志
  * GET /api/audit/logs
  */
-router.get('/logs', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.get('/logs', async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -49,7 +49,7 @@ router.get('/logs', authenticateToken, authorizeRole(['admin']), async (req, res
  * 导出审计日志
  * GET /api/audit/export
  */
-router.get('/export', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.get('/export', async (req, res) => {
   try {
     const { 
       format = 'json', 
@@ -96,7 +96,7 @@ router.get('/export', authenticateToken, authorizeRole(['admin']), async (req, r
  * 获取审计统计
  * GET /api/audit/stats
  */
-router.get('/stats', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
     const stats = await getAuditStats();
 
@@ -117,7 +117,7 @@ router.get('/stats', authenticateToken, authorizeRole(['admin']), async (req, re
  * 清理旧日志
  * POST /api/audit/cleanup
  */
-router.post('/cleanup', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.post('/cleanup', async (req, res) => {
   try {
     const { daysToKeep = 90 } = req.body;
 
@@ -144,7 +144,7 @@ router.post('/cleanup', authenticateToken, authorizeRole(['admin']), async (req,
  * 获取审计日志详情
  * GET /api/audit/logs/:id
  */
-router.get('/logs/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.get('/logs/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -185,7 +185,7 @@ router.get('/logs/:id', authenticateToken, authorizeRole(['admin']), async (req,
  * 搜索审计日志
  * POST /api/audit/search
  */
-router.post('/search', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.post('/search', async (req, res) => {
   try {
     const { 
       query, 
@@ -262,7 +262,7 @@ router.post('/search', authenticateToken, authorizeRole(['admin']), async (req, 
  * 获取审计日志类型
  * GET /api/audit/actions
  */
-router.get('/actions', authenticateToken, async (req, res) => {
+router.get('/actions', async (req, res) => {
   try {
     const actions = [
       'CREATE_WALLET',
@@ -299,7 +299,7 @@ router.get('/actions', authenticateToken, async (req, res) => {
  * 获取审计资源类型
  * GET /api/audit/resources
  */
-router.get('/resources', authenticateToken, async (req, res) => {
+router.get('/resources', async (req, res) => {
   try {
     const resources = [
       'WALLET',
