@@ -4,14 +4,15 @@ export interface User {
   username: string;
   email: string;
   role: UserRole;
-  organization: string;
+  organization?: string;
   status: UserStatus;
   createdAt: Date;
-  lastLoginAt: Date;
+  lastLoginAt?: Date;
 }
 
 export enum UserRole {
   ADMIN = 'admin',
+  USER = 'user',
   OPERATOR = 'operator',
   APPROVER = 'approver',
   VIEWER = 'viewer'

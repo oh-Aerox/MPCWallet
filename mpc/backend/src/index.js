@@ -28,9 +28,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/wallets', require('./routes/wallets'));
 app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/users', require('./routes/users'));
+app.use('/api/data/users', require('./routes/users'));
 app.use('/api/mpc', require('./routes/mpc'));
 app.use('/api/audit', require('./routes/audit'));
+app.use('/api/data', require('./routes/data'));
+app.use('/api/users', require('./routes/users'));
 
 // 健康检查
 app.get('/health', (req, res) => {

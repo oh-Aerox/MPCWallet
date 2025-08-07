@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
-const ShamirSecretSharing = require('../../mpc-core/src/shamir');
+const { ShamirSecretSharing } = require('../../../mpc-core/src/index');
 
 // 初始化MPC实例
 const shamir = new ShamirSecretSharing();

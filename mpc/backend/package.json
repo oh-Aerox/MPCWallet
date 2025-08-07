@@ -10,7 +10,8 @@
     "lint": "eslint src/",
     "db:init": "node scripts/init-db.js",
     "db:test": "node scripts/test-db.js",
-    "db:reset": "node scripts/init-db.js"
+    "db:reset": "node scripts/init-db.js",
+    "db:seed": "node scripts/seed-database.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -109,12 +109,14 @@ const TransactionManagement: React.FC<TransactionManagementProps> = ({
   };
 
   const getStatusStep = (status: TransactionStatus) => {
-    const statusSteps = {
-      pending: 0,
-      approved: 1,
-      signed: 2,
-      broadcasted: 3,
-      confirmed: 4
+    const statusSteps: Record<TransactionStatus, number> = {
+      [TransactionStatus.PENDING]: 0,
+      [TransactionStatus.APPROVED]: 1,
+      [TransactionStatus.SIGNED]: 2,
+      [TransactionStatus.BROADCASTED]: 3,
+      [TransactionStatus.CONFIRMED]: 4,
+      [TransactionStatus.FAILED]: -1,
+      [TransactionStatus.REJECTED]: -1
     };
     return statusSteps[status] || 0;
   };
@@ -197,7 +199,7 @@ const TransactionManagement: React.FC<TransactionManagementProps> = ({
     {
       title: '操作',
       key: 'action',
-      render: (_, record: Transaction) => (
+      render: (_: any, record: Transaction) => (
         <Space>
           <Button 
             type="link" 

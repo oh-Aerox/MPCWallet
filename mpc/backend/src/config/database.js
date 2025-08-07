@@ -6,7 +6,7 @@ const dbConfig = {
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'password',
-  database: process.env.DB_NAME || 'mpc_wallet',
+  database: process.env.DB_NAME || 'mpcwallet',
   charset: 'utf8mb4',
   timezone: '+00:00',
   // 连接池配置

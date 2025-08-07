@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Avatar, Dropdown, Space } from 'antd';
 import {
   DashboardOutlined,
   WalletOutlined,
   TransactionOutlined,
+  TeamOutlined,
   UserOutlined,
   SettingOutlined,
   LogoutOutlined,
@@ -13,280 +14,470 @@ import {
 import Dashboard from './pages/Dashboard';
 import WalletManagement from './pages/WalletManagement';
 import TransactionManagement from './pages/TransactionManagement';
+import UserManagement from './pages/UserManagement';
 import { User, Wallet, Transaction } from './types';
 
 const { Header, Sider, Content } = Layout;
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // API 基础URL
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
+  // 获取当前用户信息
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/current-user`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setCurrentUser(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
+
+  // 获取所有用户
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/users`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setUsers(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // 获取所有钱包
+  const fetchWallets = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/wallets`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setWallets(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching wallets:', error);
+    }
+  };
+
+  // 获取所有交易
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/transactions`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setTransactions(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    }
+  };
+
+  // 初始化数据
   useEffect(() => {
-    // 模拟用户登录
-    const mockUser: User = {
-      id: '1',
-      username: 'admin',
-      email: 'admin@example.com',
-      role: 'admin',
-      organization: 'MPC Wallet Corp',
-      status: 'active',
-      createdAt: new Date(),
-      lastLoginAt: new Date()
+    const initializeData = async () => {
+      setLoading(true);
+      
+      try {
+        // 并行获取所有数据
+        await Promise.all([
+          fetchCurrentUser(),
+          fetchUsers(),
+          fetchWallets(),
+          fetchTransactions()
+        ]);
+      } catch (error) {
+        console.error('Error initializing data:', error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setCurrentUser(mockUser);
 
-    // 模拟数据
-    const mockWallets: Wallet[] = [
-      {
-        id: '1',
-        name: '主钱包',
-        address: '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
-        chain: 'ethereum',
-        threshold: 2,
-        totalShares: 3,
-        status: 'active',
-        balance: [
-          {
-            symbol: 'ETH',
-            balance: '1.23456789',
-            decimals: 18,
-            usdValue: 1234.56
-          },
-          {
-            symbol: 'USDT',
-            balance: '1000.00',
-            decimals: 6,
-            usdValue: 1000.00
-          }
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
-
-    const mockTransactions: Transaction[] = [
-      {
-        id: '1',
-        walletId: '1',
-        txHash: '0x1234567890abcdef',
-        from: '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
-        to: '0x9876543210fedcba',
-        amount: '0.1',
-        symbol: 'ETH',
-        status: 'confirmed',
-        type: 'send',
-        signatures: [],
-        approvals: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
-
-    const mockUsers: User[] = [
-      {
-        id: '1',
-        username: 'admin',
-        email: 'admin@example.com',
-        role: 'admin',
-        organization: 'MPC Wallet Corp',
-        status: 'active',
-        createdAt: new Date(),
-        lastLoginAt: new Date()
-      },
-      {
-        id: '2',
-        username: 'operator',
-        email: 'operator@example.com',
-        role: 'operator',
-        organization: 'MPC Wallet Corp',
-        status: 'active',
-        createdAt: new Date(),
-        lastLoginAt: new Date()
-      }
-    ];
-
-    setWallets(mockWallets);
-    setTransactions(mockTransactions);
-    setUsers(mockUsers);
+    initializeData();
   }, []);
 
   const handleCreateWallet = async (data: any) => {
-    // 模拟创建钱包
-    const newWallet: Wallet = {
-      id: Date.now().toString(),
-      name: data.name,
-      address: '0x' + Math.random().toString(16).substr(2, 40),
-      chain: data.chain,
-      threshold: data.threshold,
-      totalShares: data.totalShares,
-      status: 'active',
-      balance: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setWallets([...wallets, newWallet]);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/wallets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        // 重新获取钱包数据
+        await fetchWallets();
+      }
+    } catch (error) {
+      console.error('Error creating wallet:', error);
+    }
   };
 
   const handleCreateTransaction = async (data: any) => {
-    // 模拟创建交易
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      walletId: data.walletId,
-      txHash: null,
-      from: wallets.find(w => w.id === data.walletId)?.address || '',
-      to: data.to,
-      amount: data.amount,
-      symbol: data.symbol,
-      status: 'pending',
-      type: 'send',
-      signatures: [],
-      approvals: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setTransactions([...transactions, newTransaction]);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        // 重新获取交易数据
+        await fetchTransactions();
+      }
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+    }
   };
 
   const handleApproveTransaction = async (transactionId: string, approved: boolean, comment?: string) => {
-    // 模拟审批交易
-    setTransactions(transactions.map(tx => {
-      if (tx.id === transactionId) {
-        return {
-          ...tx,
-          status: approved ? 'approved' : 'rejected',
-          approvals: [...tx.approvals, {
-            id: Date.now().toString(),
-            userId: currentUser?.id || '',
-            username: currentUser?.username || '',
-            approved,
-            comment,
-            timestamp: new Date()
-          }]
-        };
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/transactions/${transactionId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ approved, comment })
+      });
+
+      if (response.ok) {
+        // 重新获取交易数据
+        await fetchTransactions();
       }
-      return tx;
-    }));
+    } catch (error) {
+      console.error('Error approving transaction:', error);
+    }
   };
 
   const handleSignTransaction = async (transactionId: string) => {
-    // 模拟签名交易
-    setTransactions(transactions.map(tx => {
-      if (tx.id === transactionId) {
-        return {
-          ...tx,
-          status: 'signed',
-          signatures: [...tx.signatures, {
-            id: Date.now().toString(),
-            userId: currentUser?.id || '',
-            username: currentUser?.username || '',
-            signature: '0x' + Math.random().toString(16).substr(2, 128),
-            timestamp: new Date()
-          }]
-        };
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/transactions/${transactionId}/sign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        // 重新获取交易数据
+        await fetchTransactions();
       }
-      return tx;
-    }));
+    } catch (error) {
+      console.error('Error signing transaction:', error);
+    }
   };
 
-  const userMenu = (
-    <Menu>
-      <Menu.Item key="profile" icon={<UserOutlined />}>
-        个人资料
-      </Menu.Item>
-      <Menu.Item key="settings" icon={<SettingOutlined />}>
-        设置
-      </Menu.Item>
-      <Menu.Divider />
-      <Menu.Item key="logout" icon={<LogoutOutlined />}>
-        退出登录
-      </Menu.Item>
-    </Menu>
-  );
+  const handleViewWallet = (walletId: string) => {
+    // 实现钱包详情查看逻辑
+    console.log('View wallet:', walletId);
+  };
 
-  const menuItems = [
-    {
-      key: '/',
-      icon: <DashboardOutlined />,
-      label: '仪表板',
-    },
-    {
-      key: '/wallets',
-      icon: <WalletOutlined />,
-      label: '钱包管理',
-    },
-    {
-      key: '/transactions',
-      icon: <TransactionOutlined />,
-      label: '交易管理',
-    },
-    {
-      key: '/users',
-      icon: <UserOutlined />,
-      label: '用户管理',
-    },
-  ];
+  const handleViewTransaction = (transactionId: string) => {
+    // 实现交易详情查看逻辑
+    console.log('View transaction:', transactionId);
+  };
 
-  if (!currentUser) {
-    return <div>Loading...</div>;
+  // 用户管理相关函数
+  const handleCreateUser = async (data: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('创建用户失败');
+      }
+
+      // 重新获取用户列表
+      await fetchUsers();
+    } catch (error) {
+      console.error('创建用户失败:', error);
+      throw error;
+    }
+  };
+
+  const handleUpdateUser = async (userId: string, data: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('更新用户失败');
+      }
+
+      // 重新获取用户列表
+      await fetchUsers();
+    } catch (error) {
+      console.error('更新用户失败:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('删除用户失败');
+      }
+
+      // 重新获取用户列表
+      await fetchUsers();
+    } catch (error) {
+      console.error('删除用户失败:', error);
+      throw error;
+    }
+  };
+
+  // 处理菜单点击
+  const handleMenuClick = ({ key }: { key: string }) => {
+    console.log('Menu clicked:', key);
+    navigate(`/${key}`);
+  };
+
+  // 根据当前路径获取选中的菜单项
+  const getSelectedKey = () => {
+    const path = location.pathname;
+    console.log('Current path:', path);
+    if (path === '/' || path === '/dashboard') return 'dashboard';
+    if (path === '/wallets') return 'wallets';
+    if (path === '/transactions') return 'transactions';
+    if (path === '/users') return 'users';
+    return 'dashboard';
+  };
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <div>加载中...</div>
+      </div>
+    );
   }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed}>
-        <div style={{ height: 32, margin: 16, background: 'rgba(255, 255, 255, 0.2)' }} />
+      <Sider 
+        collapsible 
+        collapsed={collapsed} 
+        onCollapse={setCollapsed}
+        theme="dark"
+      >
+        <div style={{ 
+          height: '32px', 
+          margin: '16px', 
+          background: 'rgba(255, 255, 255, 0.2)',
+          borderRadius: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontSize: '14px',
+          fontWeight: 'bold'
+        }}>
+          MPC Wallet
+        </div>
         <Menu
           theme="dark"
-          defaultSelectedKeys={['/']}
+          selectedKeys={[getSelectedKey()]}
           mode="inline"
-          items={menuItems}
+          onClick={handleMenuClick}
+          items={[
+            {
+              key: 'dashboard',
+              icon: <DashboardOutlined />,
+              label: '仪表板',
+            },
+            {
+              key: 'wallets',
+              icon: <WalletOutlined />,
+              label: '钱包管理',
+            },
+            {
+              key: 'transactions',
+              icon: <TransactionOutlined />,
+              label: '交易管理',
+            },
+            {
+              key: 'users',
+              icon: <TeamOutlined />,
+              label: '用户管理',
+            },
+          ]}
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: 0, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', marginLeft: 16 }}>
-            MPC钱包系统
+        <Header style={{ 
+          padding: '0 16px', 
+          background: '#fff', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between' 
+        }}>
+          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+            MPC 钱包管理系统
           </div>
-          <Space style={{ marginRight: 16 }}>
-            <BellOutlined style={{ fontSize: '18px' }} />
-            <Dropdown overlay={userMenu} placement="bottomRight">
-              <Space style={{ cursor: 'pointer' }}>
-                <Avatar icon={<UserOutlined />} />
-                <span>{currentUser.username}</span>
-              </Space>
+          <Space>
+            <BellOutlined style={{ fontSize: '16px' }} />
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'profile',
+                    icon: <UserOutlined />,
+                    label: '个人资料',
+                  },
+                  {
+                    key: 'settings',
+                    icon: <SettingOutlined />,
+                    label: '设置',
+                  },
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                  },
+                ],
+              }}
+            >
+              <Avatar 
+                style={{ 
+                  backgroundColor: '#1890ff', 
+                  cursor: 'pointer' 
+                }}
+              >
+                {currentUser?.username?.charAt(0)?.toUpperCase() || 'U'}
+              </Avatar>
             </Dropdown>
           </Space>
         </Header>
         <Content style={{ margin: '16px' }}>
+          {/* 测试按钮 */}
+          <div style={{ marginBottom: '16px' }}>
+            <button onClick={() => navigate('/dashboard')}>测试仪表板</button>
+            <button onClick={() => navigate('/wallets')} style={{ marginLeft: '8px' }}>测试钱包</button>
+            <button onClick={() => navigate('/transactions')} style={{ marginLeft: '8px' }}>测试交易</button>
+          </div>
           <Routes>
-            <Route path="/" element={
-              <Dashboard 
-                wallets={wallets}
-                transactions={transactions}
-                users={users}
-              />
-            } />
-            <Route path="/wallets" element={
-              <WalletManagement 
-                wallets={wallets}
-                users={users}
-                onCreateWallet={handleCreateWallet}
-                onViewWallet={() => {}}
-              />
-            } />
-            <Route path="/transactions" element={
-              <TransactionManagement 
-                transactions={transactions}
-                wallets={wallets}
-                users={users}
-                onCreateTransaction={handleCreateTransaction}
-                onApproveTransaction={handleApproveTransaction}
-                onSignTransaction={handleSignTransaction}
-              />
-            } />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route 
+              path="/" 
+              element={<Navigate to="/dashboard" replace />} 
+            />
+            <Route 
+              path="/dashboard" 
+              element={
+                <div>
+                  <h2>仪表板页面</h2>
+                  <Dashboard 
+                    wallets={wallets}
+                    transactions={transactions}
+                    users={users}
+                  />
+                </div>
+              } 
+            />
+            <Route 
+              path="/wallets" 
+              element={
+                <div>
+                  <h2>钱包管理页面</h2>
+                  <WalletManagement 
+                    wallets={wallets}
+                    users={users}
+                    onCreateWallet={handleCreateWallet}
+                    onViewWallet={handleViewWallet}
+                  />
+                </div>
+              } 
+            />
+            <Route 
+              path="/transactions" 
+              element={
+                <div>
+                  <h2>交易管理页面</h2>
+                  <TransactionManagement 
+                    transactions={transactions}
+                    wallets={wallets}
+                    users={users}
+                    onCreateTransaction={handleCreateTransaction}
+                    onApproveTransaction={handleApproveTransaction}
+                    onSignTransaction={handleSignTransaction}
+                  />
+                </div>
+              } 
+            />
+            <Route 
+              path="/users" 
+              element={
+                <div>
+                  <h2>用户管理页面</h2>
+                  <UserManagement 
+                    users={users}
+                    onCreateUser={handleCreateUser}
+                    onUpdateUser={handleUpdateUser}
+                    onDeleteUser={handleDeleteUser}
+                  />
+                </div>
+              } 
+            />
           </Routes>
         </Content>
       </Layout>

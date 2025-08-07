@@ -2,93 +2,31 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { authenticateToken, authorizeRole } = require('../middleware/auth');
-const { validateUserData } = require('../middleware/validation');
-const { logAudit } = require('../utils/audit');
-
-// 模拟用户数据库
-let users = [
-  {
-    id: '1',
-    username: 'admin',
-    email: 'admin@example.com',
-    password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-    role: 'admin',
-    organization: 'MPC Wallet Corp',
-    status: 'active',
-    createdAt: new Date(),
-    lastLoginAt: new Date()
-  },
-  {
-    id: '2',
-    username: 'operator',
-    email: 'operator@example.com',
-    password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-    role: 'operator',
-    organization: 'MPC Wallet Corp',
-    status: 'active',
-    createdAt: new Date(),
-    lastLoginAt: new Date()
-  },
-  {
-    id: '3',
-    username: 'approver',
-    email: 'approver@example.com',
-    password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-    role: 'approver',
-    organization: 'MPC Wallet Corp',
-    status: 'active',
-    createdAt: new Date(),
-    lastLoginAt: new Date()
-  }
-];
+const { query } = require('../config/database');
 
 /**
- * 获取用户列表
+ * 获取所有用户
  * GET /api/users
  */
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 10, role, status } = req.query;
-    
-    let filteredUsers = [...users];
-
-    // 按角色过滤
-    if (role) {
-      filteredUsers = filteredUsers.filter(user => user.role === role);
-    }
-
-    // 按状态过滤
-    if (status) {
-      filteredUsers = filteredUsers.filter(user => user.status === status);
-    }
-
-    // 分页
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
-
-    // 移除密码字段
-    const safeUsers = paginatedUsers.map(user => {
-      const { password, ...safeUser } = user;
-      return safeUser;
-    });
+    const users = await query(
+      'SELECT id, username, email, role, organization, status, created_at, last_login_at FROM users ORDER BY created_at DESC'
+    );
 
     res.json({
       success: true,
-      data: safeUsers,
-      pagination: {
-        total: filteredUsers.length,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(filteredUsers.length / limit)
-      }
+      data: users.map(user => ({
+        ...user,
+        createdAt: user.created_at,
+        lastLoginAt: user.last_login_at
+      }))
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Get users error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch users'
+      error: '获取用户列表失败'
     });
   }
 });
@@ -97,29 +35,36 @@ router.get('/', authenticateToken, async (req, res) => {
  * 获取单个用户
  * GET /api/users/:id
  */
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const user = users.find(u => u.id === req.params.id);
+    const { id } = req.params;
     
-    if (!user) {
+    const users = await query(
+      'SELECT id, username, email, role, organization, status, created_at, last_login_at FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (users.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: '用户不存在'
       });
     }
 
-    // 移除密码字段
-    const { password, ...safeUser } = user;
-
+    const user = users[0];
     res.json({
       success: true,
-      data: safeUser
+      data: {
+        ...user,
+        createdAt: user.created_at,
+        lastLoginAt: user.last_login_at
+      }
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error('Get user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch user'
+      error: '获取用户信息失败'
     });
   }
 });
@@ -128,64 +73,52 @@ router.get('/:id', authenticateToken, async (req, res) => {
  * 创建用户
  * POST /api/users
  */
-router.post('/', authenticateToken, authorizeRole(['admin']), validateUserData, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { username, email, password, role, organization } = req.body;
+    const { username, email, password, role, organization, status } = req.body;
 
-    // 检查用户名是否已存在
-    const existingUser = users.find(u => u.username === username || u.email === email);
-    if (existingUser) {
+    // 验证必填字段
+    if (!username || !email || !password || !role) {
       return res.status(400).json({
         success: false,
-        error: 'Username or email already exists'
+        error: '用户名、邮箱、密码和角色是必填项'
+      });
+    }
+
+    // 检查用户名是否已存在
+    const existingUsers = await query(
+      'SELECT id FROM users WHERE username = ? OR email = ?',
+      [username, email]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: '用户名或邮箱已存在'
       });
     }
 
     // 加密密码
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 创建新用户
-    const newUser = {
-      id: uuidv4(),
-      username,
-      email,
-      password: hashedPassword,
-      role,
-      organization,
-      status: 'active',
-      createdAt: new Date(),
-      lastLoginAt: null
-    };
-
-    users.push(newUser);
-
-    // 记录审计日志
-    await logAudit({
-      userId: req.user.id,
-      action: 'CREATE_USER',
-      resource: 'USER',
-      resourceId: newUser.id,
-      details: {
-        username: newUser.username,
-        email: newUser.email,
-        role: newUser.role,
-        organization: newUser.organization
-      }
-    });
-
-    // 移除密码字段
-    const { password: _, ...safeUser } = newUser;
+    // 创建用户
+    const userId = uuidv4();
+    await query(
+      `INSERT INTO users (id, username, email, password, role, organization, status, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, username, email, hashedPassword, role, organization || null, status || 'active']
+    );
 
     res.status(201).json({
       success: true,
-      data: safeUser,
-      message: 'User created successfully'
+      message: '用户创建成功',
+      data: { id: userId }
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('Create user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create user'
+      error: '创建用户失败'
     });
   }
 });
@@ -194,70 +127,62 @@ router.post('/', authenticateToken, authorizeRole(['admin']), validateUserData, 
  * 更新用户
  * PUT /api/users/:id
  */
-router.put('/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const user = users.find(u => u.id === req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({
+    const { id } = req.params;
+    const { username, email, role, organization, status } = req.body;
+
+    // 验证必填字段
+    if (!username || !email || !role) {
+      return res.status(400).json({
         success: false,
-        error: 'User not found'
+        error: '用户名、邮箱和角色是必填项'
       });
     }
 
-    const { username, email, role, organization, status } = req.body;
+    // 检查用户是否存在
+    const existingUsers = await query(
+      'SELECT id FROM users WHERE id = ?',
+      [id]
+    );
 
-    // 检查用户名是否已被其他用户使用
-    if (username && username !== user.username) {
-      const existingUser = users.find(u => u.username === username && u.id !== req.params.id);
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          error: 'Username already exists'
-        });
-      }
+    if (existingUsers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: '用户不存在'
+      });
     }
 
-    // 检查邮箱是否已被其他用户使用
-    if (email && email !== user.email) {
-      const existingUser = users.find(u => u.email === email && u.id !== req.params.id);
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          error: 'Email already exists'
-        });
-      }
+    // 检查用户名和邮箱是否被其他用户使用
+    const duplicateUsers = await query(
+      'SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?',
+      [username, email, id]
+    );
+
+    if (duplicateUsers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: '用户名或邮箱已被其他用户使用'
+      });
     }
 
-    // 更新用户信息
-    if (username) user.username = username;
-    if (email) user.email = email;
-    if (role) user.role = role;
-    if (organization) user.organization = organization;
-    if (status) user.status = status;
-
-    // 记录审计日志
-    await logAudit({
-      userId: req.user.id,
-      action: 'UPDATE_USER',
-      resource: 'USER',
-      resourceId: user.id,
-      details: req.body
-    });
-
-    // 移除密码字段
-    const { password, ...safeUser } = user;
+    // 更新用户
+    await query(
+      `UPDATE users SET 
+       username = ?, email = ?, role = ?, organization = ?, status = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [username, email, role, organization || null, status || 'active', id]
+    );
 
     res.json({
       success: true,
-      data: safeUser,
-      message: 'User updated successfully'
+      message: '用户更新成功'
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('Update user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update user'
+      error: '更新用户失败'
     });
   }
 });
@@ -266,137 +191,99 @@ router.put('/:id', authenticateToken, authorizeRole(['admin']), async (req, res)
  * 删除用户
  * DELETE /api/users/:id
  */
-router.delete('/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const userIndex = users.findIndex(u => u.id === req.params.id);
-    
-    if (userIndex === -1) {
+    const { id } = req.params;
+
+    // 检查用户是否存在
+    const existingUsers = await query(
+      'SELECT id FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (existingUsers.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: '用户不存在'
       });
     }
 
-    const user = users[userIndex];
+    // 检查用户是否有关联的钱包或交易
+    const walletParticipants = await query(
+      'SELECT id FROM wallet_participants WHERE user_id = ?',
+      [id]
+    );
 
-    // 不能删除自己
-    if (user.id === req.user.id) {
+    if (walletParticipants.length > 0) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot delete yourself'
+        error: '该用户参与了钱包，无法删除'
       });
     }
 
-    // 记录审计日志
-    await logAudit({
-      userId: req.user.id,
-      action: 'DELETE_USER',
-      resource: 'USER',
-      resourceId: user.id,
-      details: {
-        deletedUsername: user.username,
-        deletedEmail: user.email
-      }
-    });
-
     // 删除用户
-    users.splice(userIndex, 1);
+    await query('DELETE FROM users WHERE id = ?', [id]);
 
     res.json({
       success: true,
-      message: 'User deleted successfully'
+      message: '用户删除成功'
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('Delete user error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete user'
+      error: '删除用户失败'
     });
   }
 });
 
 /**
- * 重置用户密码
- * POST /api/users/:id/reset-password
+ * 更新用户密码
+ * PUT /api/users/:id/password
  */
-router.post('/:id/reset-password', authenticateToken, authorizeRole(['admin']), async (req, res) => {
+router.put('/:id/password', async (req, res) => {
   try {
-    const user = users.find(u => u.id === req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
         success: false,
-        error: 'User not found'
+        error: '密码是必填项'
       });
     }
 
-    const { newPassword } = req.body;
+    // 检查用户是否存在
+    const existingUsers = await query(
+      'SELECT id FROM users WHERE id = ?',
+      [id]
+    );
 
-    if (!newPassword) {
-      return res.status(400).json({
+    if (existingUsers.length === 0) {
+      return res.status(404).json({
         success: false,
-        error: 'New password is required'
+        error: '用户不存在'
       });
     }
 
     // 加密新密码
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 记录审计日志
-    await logAudit({
-      userId: req.user.id,
-      action: 'RESET_PASSWORD',
-      resource: 'USER',
-      resourceId: user.id,
-      details: {
-        targetUsername: user.username
-      }
-    });
+    // 更新密码
+    await query(
+      'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
+      [hashedPassword, id]
+    );
 
     res.json({
       success: true,
-      message: 'Password reset successfully'
+      message: '密码更新成功'
     });
   } catch (error) {
-    console.error('Error resetting password:', error);
+    console.error('Update password error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to reset password'
-    });
-  }
-});
-
-/**
- * 获取用户统计
- * GET /api/users/stats
- */
-router.get('/stats', authenticateToken, async (req, res) => {
-  try {
-    const stats = {
-      total: users.length,
-      byRole: {},
-      byStatus: {},
-      active: users.filter(u => u.status === 'active').length,
-      inactive: users.filter(u => u.status === 'inactive').length,
-      suspended: users.filter(u => u.status === 'suspended').length
-    };
-
-    // 按角色统计
-    users.forEach(user => {
-      stats.byRole[user.role] = (stats.byRole[user.role] || 0) + 1;
-      stats.byStatus[user.status] = (stats.byStatus[user.status] || 0) + 1;
-    });
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    console.error('Error fetching user stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch user stats'
+      error: '更新密码失败'
     });
   }
 });

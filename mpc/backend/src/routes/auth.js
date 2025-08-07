@@ -107,7 +107,15 @@ router.post('/login', async (req, res) => {
  */
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, organization } = req.body;
+    const { username, email, password, role, organization, status } = req.body;
+
+    // 验证必填字段
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: '用户名、邮箱和密码是必填项'
+      });
+    }
 
     // 检查用户名是否已存在
     const existingUsers = await query(
@@ -128,8 +136,8 @@ router.post('/register', async (req, res) => {
     // 创建新用户
     const userId = uuidv4();
     await query(
-      'INSERT INTO users (id, username, email, password, role, organization, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [userId, username, email, hashedPassword, 'operator', organization, 'active']
+      'INSERT INTO users (id, username, email, password, role, organization, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
+      [userId, username, email, hashedPassword, role || 'user', organization || null, status || 'active']
     );
 
     res.status(201).json({
@@ -138,11 +146,11 @@ router.post('/register', async (req, res) => {
         id: userId,
         username,
         email,
-        role: 'operator',
-        organization,
-        status: 'active'
+        role: role || 'user',
+        organization: organization || null,
+        status: status || 'active'
       },
-      message: '注册成功'
+      message: '用户创建成功'
     });
   } catch (error) {
     console.error('Register error:', error);

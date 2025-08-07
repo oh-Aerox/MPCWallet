@@ -138,7 +138,7 @@ const WalletManagement: React.FC<WalletManagementProps> = ({
     {
       title: '操作',
       key: 'action',
-      render: (_, record: Wallet) => (
+      render: (_: any, record: Wallet) => (
         <Space>
           <Button 
             type="link" 
