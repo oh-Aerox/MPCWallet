@@ -1,0 +1,23 @@
+{
+  "name": "mpc-wallet",
+  "version": "1.0.0",
+  "description": "MPC 钱包教学实现 — 基于 Feldman VSS + 无 Dealer DKG + TSS（乘法 k 分享）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "demo:dkg":      "node -e \"const {demo1_InitWallet}=require('./index');demo1_InitWallet().then(()=>process.exit(0))\"",
+    "demo:hd":       "node -e \"const {demo1_InitWallet,demo2_DeriveAddresses}=require('./index');demo1_InitWallet().then(w=>demo2_DeriveAddresses(w)).then(()=>process.exit(0))\"",
+    "demo:sign":     "node -e \"const {demo1_InitWallet,demo3_SignMessage}=require('./index');demo1_InitWallet().then(w=>demo3_SignMessage(w)).then(()=>process.exit(0))\"",
+    "demo:transfer": "node -e \"const {demo1_InitWallet,demo4_SignTransfer}=require('./index');demo1_InitWallet().then(w=>demo4_SignTransfer(w)).then(()=>process.exit(0))\"",
+    "demo:security": "node -e \"const {demo1_InitWallet,demo7_SecurityValidation}=require('./index');demo1_InitWallet().then(w=>demo7_SecurityValidation(w)).then(()=>process.exit(0))\""
+  },
+  "dependencies": {
+    "@noble/curves": "1.6.0",
+    "@noble/hashes": "1.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["mpc","tss","dkg","threshold-signature","ethereum","wallet","secp256k1","shamir-secret-sharing","feldman-vss"],
+  "license": "MIT"
+}
